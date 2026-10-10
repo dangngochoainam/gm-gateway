@@ -15,9 +15,14 @@ var (
 
 func BuildContainer() {
 	ctn := dig.New()
+	provide := func(constructor any) {
+		if err := ctn.Provide(constructor); err != nil {
+			panic(err)
+		}
+	}
 
 	// CONFIG
-	ctn.Provide(configs.LoadConfig)
+	provide(configs.LoadConfig)
 
 	// No database here on purpose: the gateway is stateless so it can scale
 	// horizontally and restart freely. State belongs to the domain services.

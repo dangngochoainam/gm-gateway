@@ -31,7 +31,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
 	}
-	defer loghelper.Logger.Sync()
+	defer func() { _ = loghelper.Logger.Sync() }()
 
 	// Cancelled on SIGINT/SIGTERM, which starts the drain below.
 	shutdownCtx, stopListeningForSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -46,7 +46,7 @@ func main() {
 	if err != nil {
 		log.Fatalln("Failed to create gm-product client:", err)
 	}
-	defer productConn.Close()
+	defer func() { _ = productConn.Close() }()
 
 	// Routes generated from google.api.http annotations are forwarded to the
 	// service that owns them. One RegisterXHandler call per downstream service.
