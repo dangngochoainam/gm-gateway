@@ -58,7 +58,7 @@ cd ../gm-core && make gen-proto   # on the host — needs buf; this repo has no 
 make mod                          # inside the container — re-tidy and re-vendor
 ```
 
-Commit the regenerated `gm-core/application/` alongside your `.proto` change. If the change adds or moves
+Generated code in `gm-core/application/` is gitignored, so commit only the `.proto` change. If the change adds or moves
 HTTP routes, update the matching `Register<Service>ServiceHandler` call in `cmd/server/main.go`,
 one per downstream service connection. `gm-core` is bind-mounted at `/gm-core` in the debug container so
 the `replace github.com/dangngochoainam/gm-core => ../gm-core` in `go.mod` resolves from `/app`.
