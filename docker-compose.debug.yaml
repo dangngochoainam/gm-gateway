@@ -1,0 +1,29 @@
+services:
+  gm-gateway:
+    container_name: gm-gateway-debug
+    build:
+      context: .
+      dockerfile: ./Dockerfile.debug
+    volumes:
+      - ./:/app
+      # mount gopkg into container
+      - ../gopkg:/gopkg
+      # mount gm-core (shared protobuf contracts) into container
+      - ../gm-core:/gm-core
+    ports:
+      - "50061:50051" # HTTP gateway
+      - "2302:2302" # Delve debugger port
+    networks:
+      - docker_stack
+    stdin_open: true
+    tty: true
+    entrypoint: ["bash"]
+    # No DATABASE_POSTGRES__* here: the gateway is stateless and never opens a
+    # database connection. State belongs to the domain services behind it.
+    # cpus: 1
+    # mem_limit: 512M
+    # mem_reservation: 256M
+
+networks:
+  docker_stack:
+    external: true

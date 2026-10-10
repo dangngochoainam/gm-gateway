@@ -1,0 +1,16 @@
+FROM golang:1.24-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache bash git ca-certificates make curl
+
+# No protoc and no protoc-gen-* here. Every .proto and every generated package lives
+# in gm-core, which generates with buf; this image only ever compiles the result.
+
+# No Atlas either. The gateway is stateless by design (see internal/diregistry),
+# so there is no db/ directory, no GORM entity, and nothing to migrate.
+
+RUN go install github.com/go-delve/delve/cmd/dlv@v1.26.3 && \
+    go install github.com/githubnemo/CompileDaemon@v1.4.0
+
+EXPOSE 50051 2302

@@ -1,0 +1,4 @@
+/vendor
+.env
+db/golang-migrate/atlas-loader
+cmd/server/bin
