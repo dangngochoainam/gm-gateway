@@ -7,7 +7,3 @@ formatters:
   enable:
     - gofmt
     - goimports
-
-issues:
-  # Chỉ lỗi mới so với master làm fail; lỗi có sẵn được ghi trong NOTES.md.
-  new-from-merge-base: origin/master

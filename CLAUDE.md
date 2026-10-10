@@ -24,9 +24,9 @@ make run-watch          # Live reload qua CompileDaemon (Delve ở port 2302)
 cd ../gm-core && make gen-proto   # chạy trên host: cần buf, image này không mang theo
 make mod                # quay lại đây, vendor lại để code sinh ra mới được nhận
 
-# Kiểm tra (config lint ở .golangci.yml; lỗi lint có sẵn ghi trong NOTES.md)
+# Kiểm tra (config lint ở .golangci.yml)
 make fmt                # sửa format: gofmt + goimports
-make lint               # golangci-lint v2.14.0 — chỉ chặn lỗi mới so với origin/master
+make lint               # golangci-lint v2.14.0 — lint toàn repo
 make build              # go build ./...
 make verify             # lint + build, không chạy test
 make test               # go test ./... — unit test, không tag
