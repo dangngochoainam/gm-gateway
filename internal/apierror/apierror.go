@@ -8,16 +8,30 @@ import (
 	"net/http"
 )
 
-// Body is the error envelope returned by every gateway-generated error.
-type Body struct {
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	RequestID string `json:"request_id,omitempty"`
+// FieldViolation names one request field the client must fix.
+type FieldViolation struct {
+	Field       string `json:"field"`
+	Description string `json:"description"`
 }
 
-// Write renders body as JSON with the given HTTP status.
-func Write(w http.ResponseWriter, httpStatus int, body Body) {
+// Error is the error object returned by every gateway-generated error.
+type Error struct {
+	Code            int              `json:"code"`
+	Status          string           `json:"status"`
+	Message         string           `json:"message"`
+	Reason          string           `json:"reason,omitempty"`
+	RequestID       string           `json:"requestId,omitempty"`
+	FieldViolations []FieldViolation `json:"fieldViolations,omitempty"`
+}
+
+// Write renders {"isSuccess": false, "systemCode": systemCode, "error": e} with
+// HTTP status e.Code.
+func Write(w http.ResponseWriter, systemCode int32, e Error) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(httpStatus)
-	_ = json.NewEncoder(w).Encode(body)
+	w.WriteHeader(e.Code)
+	_ = json.NewEncoder(w).Encode(struct {
+		IsSuccess  bool  `json:"isSuccess"`
+		SystemCode int32 `json:"systemCode"`
+		Error      Error `json:"error"`
+	}{false, systemCode, e})
 }

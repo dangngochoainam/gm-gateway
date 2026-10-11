@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -107,5 +108,64 @@ func TestRecoveryConvertsPanicTo500(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "boom") {
 		t.Error("panic detail must not reach the client")
+	}
+}
+
+// errorStatus decodes the "error.status" field of a gateway error body.
+func errorStatus(t *testing.T, rec *httptest.ResponseRecorder) string {
+	t.Helper()
+	var body struct {
+		Error struct {
+			Status string `json:"status"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body is not JSON: %v (%s)", err, rec.Body.String())
+	}
+	return body.Error.Status
+}
+
+func TestRecoveryWritesErrorShape(t *testing.T) {
+	handler := Chain(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("boom")
+	}), RequestID, Recovery)
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/products", nil))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+	if got := errorStatus(t, rec); got != "INTERNAL" {
+		t.Errorf("error.status = %q, want INTERNAL", got)
+	}
+}
+
+func TestMaxBodyBytesWritesErrorShape(t *testing.T) {
+	handler := MaxBodyBytes(16)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/say-hello", strings.NewReader(strings.Repeat("a", 64))))
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("status = %d, want 413", rec.Code)
+	}
+	if got := errorStatus(t, rec); got != "REQUEST_TOO_LARGE" {
+		t.Errorf("error.status = %q, want REQUEST_TOO_LARGE", got)
+	}
+}
+
+func TestMaxBodyBytesAllowsExactLimit(t *testing.T) {
+	called := false
+	handler := MaxBodyBytes(16)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/say-hello", strings.NewReader(strings.Repeat("a", 16))))
+
+	if !called {
+		t.Error("request at exactly the limit must reach the next handler")
+	}
+	if rec.Code == http.StatusRequestEntityTooLarge {
+		t.Error("request at exactly the limit must not get 413")
 	}
 }

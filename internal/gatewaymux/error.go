@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"strings"
 
+	commondtov1 "github.com/dangngochoainam/gm-core/application/common/v1/dto"
 	"github.com/dangngochoainam/gm-gateway/internal/apierror"
 	"github.com/dangngochoainam/gm-gateway/internal/middleware"
 	"github.com/dangngochoainam/gopkg/loghelper"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -82,11 +84,32 @@ func errorHandler(ctx context.Context, _ *runtime.ServeMux, _ runtime.Marshaler,
 		return
 	}
 
-	apierror.Write(w, m.httpStatus, apierror.Body{
-		Code:      m.code,
+	body := apierror.Error{
+		Code:      m.httpStatus,
+		Status:    m.code,
 		Message:   message,
 		RequestID: middleware.RequestIDFromContext(ctx),
-	})
+	}
+	// ErrorInfo.domain and metadata stay internal; field violations are only
+	// published for client errors, never alongside a hidden 5xx message.
+	for _, d := range st.Details() {
+		switch d := d.(type) {
+		case *errdetails.ErrorInfo:
+			body.Reason = d.GetReason()
+		case *errdetails.BadRequest:
+			if m.httpStatus >= http.StatusInternalServerError {
+				continue
+			}
+			for _, v := range d.GetFieldViolations() {
+				body.FieldViolations = append(body.FieldViolations, apierror.FieldViolation{
+					Field:       jsonFieldPath(v.GetField()),
+					Description: v.GetDescription(),
+				})
+			}
+		}
+	}
+
+	apierror.Write(w, apierror.SystemCode(body.Reason, m.httpStatus), body)
 }
 
 // routingErrorHandler answers requests that match no route. The grpc-gateway
@@ -99,8 +122,17 @@ func routingErrorHandler(ctx context.Context, _ *runtime.ServeMux, _ runtime.Mar
 		"http_status", httpStatus,
 	)
 
-	apierror.Write(w, httpStatus, apierror.Body{
-		Code:      strings.ToUpper(strings.ReplaceAll(http.StatusText(httpStatus), " ", "_")),
+	systemCode := apierror.SystemCode("", httpStatus)
+	switch httpStatus {
+	case http.StatusNotFound:
+		systemCode = int32(commondtov1.SystemCode_ROUTE_NOT_FOUND)
+	case http.StatusMethodNotAllowed:
+		systemCode = int32(commondtov1.SystemCode_ROUTE_METHOD_NOT_ALLOWED)
+	}
+
+	apierror.Write(w, systemCode, apierror.Error{
+		Code:      httpStatus,
+		Status:    strings.ToUpper(strings.ReplaceAll(http.StatusText(httpStatus), " ", "_")),
 		Message:   http.StatusText(httpStatus),
 		RequestID: middleware.RequestIDFromContext(ctx),
 	})
