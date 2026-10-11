@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	commondtov1 "github.com/dangngochoainam/gm-core/application/common/v1/dto"
 	"github.com/dangngochoainam/gm-gateway/internal/apierror"
 	"github.com/dangngochoainam/gopkg/commonhelper"
 	"github.com/dangngochoainam/gopkg/loghelper"
@@ -100,8 +101,9 @@ func Recovery(next http.Handler) http.Handler {
 					"path", r.URL.Path,
 					"stack", string(debug.Stack()),
 				)
-				apierror.Write(w, http.StatusInternalServerError, apierror.Body{
-					Code:      "INTERNAL",
+				apierror.Write(w, int32(commondtov1.SystemCode_GATEWAY_INTERNAL_ERROR), apierror.Error{
+					Code:      http.StatusInternalServerError,
+					Status:    "INTERNAL",
 					Message:   "Internal server error",
 					RequestID: RequestIDFromContext(r.Context()),
 				})
@@ -137,8 +139,9 @@ func MaxBodyBytes(limit int64) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.ContentLength > limit {
-				apierror.Write(w, http.StatusRequestEntityTooLarge, apierror.Body{
-					Code:      "REQUEST_TOO_LARGE",
+				apierror.Write(w, int32(commondtov1.SystemCode_REQUEST_TOO_LARGE), apierror.Error{
+					Code:      http.StatusRequestEntityTooLarge,
+					Status:    "REQUEST_TOO_LARGE",
 					Message:   "Request body too large",
 					RequestID: RequestIDFromContext(r.Context()),
 				})

@@ -24,6 +24,7 @@ func New() *runtime.ServeMux {
 		runtime.WithErrorHandler(errorHandler),
 		runtime.WithRoutingErrorHandler(routingErrorHandler),
 		runtime.WithForwardResponseOption(forwardLocationHeader),
+		runtime.WithForwardResponseRewriter(wrapSuccess),
 	)
 }
 

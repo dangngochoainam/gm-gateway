@@ -17,7 +17,7 @@ Mục 1 (v1) đã xong, trừ auth (1.7) và phần deploy (1.14). Code liên qu
 | `internal/gatewaymux/mux.go` | Header allowlist, forward trace ID xuống gRPC metadata |
 | `internal/gatewaymux/error.go` | Map gRPC code → HTTP status, che lỗi nội bộ, routing error 404/405 |
 | `internal/health/health.go` | `/healthz`, `/readyz` + readiness flag cho drain |
-| `internal/apierror/apierror.go` | Một shape JSON error duy nhất cho mọi lỗi do gateway sinh ra |
+| `internal/apierror/apierror.go` | Một shape JSON error duy nhất cho mọi lỗi do gateway sinh ra: `{"isSuccess": false, "systemCode", "error": {"code", "status", "message", "reason"?, "requestId"?, "fieldViolations"?}}` (AIP-193); `SystemCode` tra `reason` sang số trong enum của gm-core |
 | `configs/config.go` | Block `server:` chứa toàn bộ timeout và limit |
 
 Đã dọn (2026-09-13): `copyhelper` + `httpclienthelper` khỏi `internal/diregistry/diregistry.go` và block `http_client` khỏi config — gateway không convert pb↔DTO và không gọi HTTP upstream; `cmd/client/` (client gRPC thử gọi thẳng gm-product, không qua gateway). Còn sót: `internal/constants/constants.go` rỗng.
@@ -75,7 +75,9 @@ Mục tiêu: một ingress HTTP đúng đắn, có thể để chạy thật mà
 
 - `[x]` `gatewaymux.errorHandler`: bảng map gRPC code → HTTP status. Code 5xx (`Internal`, `Unknown`, `DataLoss`, `Unavailable`, `DeadlineExceeded`, `Unimplemented`) trả message cố định; code do client gây ra (`InvalidArgument`, `NotFound`, `PermissionDenied`, `Unauthenticated`…) mới cho message của downstream đi qua, vì đó là thông tin client cần để sửa request.
 - `[x]` `gatewaymux.routingErrorHandler`: giữ nguyên status của routing. Default của grpc-gateway biến 405 thành `Unimplemented` → publish ra 501, sai.
-  **Lý do:** grpc-gateway mặc định đẩy nguyên `err.Error()` của downstream ra ngoài, rất dễ lộ query/stack/tên internal service. Verified: downstream chết → client nhận `503 {"code":"UNAVAILABLE","message":"Service temporarily unavailable"}`, còn `dial tcp 127.0.0.1:50060: connect: connection refused` chỉ nằm trong log.
+- `[x]` Body lỗi theo AIP-193: `{"error": {"code": <HTTP>, "status": "<NAME>", "message", "reason"?, "requestId"?, "fieldViolations"?}}`. `reason` lấy từ `google.rpc.ErrorInfo` của downstream (kể cả 5xx); `ErrorInfo.domain`/`metadata` không xuất ra. `fieldViolations` lấy từ `google.rpc.BadRequest`, chỉ với 4xx, tên field đổi sang camelCase (`items[0].unit_price` → `items[0].unitPrice`).
+- `[x]` Lớp bọc chung (`design.md` của task `workspace-api-response`, mục "Bổ sung 2026-10-11"): response thành công là `{"isSuccess": true, "systemCode": 1, "data": <message proto>}` qua `gatewaymux.wrapSuccess` (`runtime.WithForwardResponseRewriter`); lỗi là `{"isSuccess": false, "systemCode", "error": {...}}`. `systemCode` = số của `reason` trong `commondtov1.SystemCode` (gm-core); reason rỗng hoặc lạ → HTTP × 100. Mã do gateway tự sinh: route không có 40490, sai method 40590, body quá lớn 41390, panic 50090. Chỉ áp dụng cho RPC unary trả JSON; redirect, `HttpBody`, streaming chưa hỗ trợ.
+  **Lý do:** grpc-gateway mặc định đẩy nguyên `err.Error()` của downstream ra ngoài, rất dễ lộ query/stack/tên internal service. Verified: downstream chết → client nhận `503 {"isSuccess":false,"systemCode":50300,"error":{"code":503,"status":"UNAVAILABLE","message":"Service temporarily unavailable"}}`, còn `dial tcp 127.0.0.1:50060: connect: connection refused` chỉ nằm trong log.
 
 ### 1.9 Giới hạn input cơ bản
 
@@ -207,7 +209,7 @@ Gateway càng mỏng càng dễ vận hành. Mọi logic nghiệp vụ ở đây
 | JWT / auth middleware | `authhelper` |
 | Metrics Prometheus | `prometheushelper` |
 | Rate limit state | `redisclienthelper` |
-| Response envelope | `responsehelper` |
+| Domain sentinel error (service map sang gRPC status) | `responsehelper` + `grpcmiddlewarehelper.ToStatus` |
 | Trace ID context key | `commonhelper.TRACE_ID` |
 
 Trước khi viết helper mới, đọc `gopkg/README.md`. Code cross-cutting thuộc về `gopkg`, không thuộc về gateway.
